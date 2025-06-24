@@ -2,7 +2,7 @@
 <package>
 	<metadata>
 		<id>uHttpSharp</id>
-		<version>0.1.6.22</version>
+		<version>0.1.6.23</version>
 		<title>uHttpSharp</title>
 		<authors>Shani Elharrar, Joe White, Hüseyin Uslu</authors>
 		<owners>Shani Elharrar, Joe White, Hüseyin Uslu</owners>
@@ -14,7 +14,10 @@
 		<copyright>Copyright 2014</copyright>
 		<tags>http server microframeworks</tags>
 		<dependencies>
+			<dependency id="Microsoft.Bcl.AsyncInterfaces" version="1.0.0" />
 			<dependency id="Newtonsoft.Json" version="6.0.6" />
+			<dependency id="System.Runtime.CompilerServices.Unsafe" version="4.5.2" />
+			<dependency id="System.Threading.Tasks.Extensions" version="4.5.2" />
 		</dependencies>
 	</metadata>
 	<files>

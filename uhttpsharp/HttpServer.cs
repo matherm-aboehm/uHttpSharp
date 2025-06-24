@@ -26,14 +26,16 @@ using uhttpsharp.Logging;
 
 namespace uhttpsharp
 {
-    public sealed class HttpServer : IDisposable
+    public sealed class HttpServer : IDisposable, IAsyncDisposable
     {
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
 
         private bool _isActive;
+        private bool _isDisposed;
 
         private readonly IList<IHttpRequestHandler> _handlers = new List<IHttpRequestHandler>();
-        private readonly IList<IHttpListener> _listeners = new List<IHttpListener>();
+        private readonly IList<(IHttpListener, bool)> _listeners = new List<(IHttpListener, bool)>();
+        private readonly IList<Task> _runningListeners = new List<Task>();
         private readonly IHttpRequestProvider _requestProvider;
 
 
@@ -47,20 +49,26 @@ namespace uhttpsharp
             _handlers.Add(handler);
         }
 
-        public void Use(IHttpListener listener)
+        public void Use(IHttpListener listener, bool ownsListener = true)
         {
-            _listeners.Add(listener);
+            _listeners.Add((listener, ownsListener));
         }
 
         public void Start()
         {
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(HttpServer));
+
             _isActive = true;
 
-            foreach (var listener in _listeners)
+            foreach (var (listener, ownsListener) in _listeners)
             {
                 IHttpListener tempListener = listener;
 
-                Task.Run(() => Listen(tempListener));
+                var task = Task.Run(() => Listen(tempListener));
+                if (ownsListener)
+                    task = task.ContinueWith((_) => tempListener.Dispose());
+                _runningListeners.Add(task);
             }
 
             Logger.InfoFormat("Embedded uhttpserver started.");
@@ -85,9 +93,42 @@ namespace uhttpsharp
             Logger.InfoFormat("Embedded uhttpserver stopped.");
         }
 
+        private void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
+            {
+                _isActive = false;
+                _isDisposed = true;
+
+                if (disposing)
+                {
+                    var awaitAllTask = Task.WhenAll(_runningListeners);
+                    if (!awaitAllTask.IsCompleted)
+                        awaitAllTask.RunSynchronously();
+                    //HINT: Calling Wait() is needed even though RunSynchronously() was called, so exceptions are fired.
+                    //see remarks: https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.task.runsynchronously?view=net-9.0
+                    awaitAllTask.Wait();
+                }
+            }
+        }
+
         public void Dispose()
         {
-            _isActive = false;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        //see: https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/implementing-disposeasync
+        public async ValueTask DisposeAsync()
+        {
+            Dispose(false);
+            await Task.WhenAll(_runningListeners).ConfigureAwait(false);
+            GC.SuppressFinalize(this);
+        }
+
+        ~HttpServer()
+        {
+            Dispose(false);
         }
     }
 }
