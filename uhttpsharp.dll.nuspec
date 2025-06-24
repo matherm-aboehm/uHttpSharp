@@ -21,7 +21,7 @@
 		</dependencies>
 	</metadata>
 	<files>
-		<file src="uhttpsharp/bin/debug/uHttpSharp.dll" target="lib\net40" />
-		<file src="uhttpsharp/bin/debug/uHttpSharp.pdb" target="lib\net40" />
+		<file src="uhttpsharp/bin/debug/uHttpSharp.dll" target="lib\net48" />
+		<file src="uhttpsharp/bin/debug/uHttpSharp.pdb" target="lib\net48" />
 	</files>
 </package>
