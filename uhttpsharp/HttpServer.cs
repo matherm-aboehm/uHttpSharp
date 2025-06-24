@@ -60,13 +60,13 @@ namespace uhttpsharp
             {
                 IHttpListener tempListener = listener;
 
-                Task.Factory.StartNew(() => Listen(tempListener));
+                Task.Run(() => Listen(tempListener));
             }
 
             Logger.InfoFormat("Embedded uhttpserver started.");
         }
 
-        private async void Listen(IHttpListener listener)
+        private async Task Listen(IHttpListener listener)
         {
             var aggregatedHandler = _handlers.Aggregate();
 

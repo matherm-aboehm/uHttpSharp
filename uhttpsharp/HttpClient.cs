@@ -55,7 +55,7 @@ namespace uhttpsharp
             
             Logger.InfoFormat("Got Client {0}", _remoteEndPoint);
 
-            Task.Factory.StartNew(Process);
+            Task.Run(Process);
 
             UpdateLastOperationTime();
         }
@@ -70,7 +70,7 @@ namespace uhttpsharp
             _stream = new BufferedStream(_client.Stream, 8096);
         }
 
-        private async void Process()
+        private async Task Process()
         {
             try
             {
