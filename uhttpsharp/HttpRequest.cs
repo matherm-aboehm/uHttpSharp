@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using uhttpsharp.Headers;
 
 namespace uhttpsharp
@@ -84,9 +85,9 @@ namespace uhttpsharp
         {
             get
             {
-                if (QueryString == null)
+                if (QueryString == null || !QueryString.Any())
                 {
-                    return Uri.OriginalString;    
+                    return Uri.OriginalString;
                 }
 
                 return Uri.OriginalString + "?" + QueryString.ToUriData();

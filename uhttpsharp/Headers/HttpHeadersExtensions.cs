@@ -53,7 +53,7 @@ namespace uhttpsharp.Headers
                 builder.AppendFormat("{0}={1}&", Uri.EscapeDataString(header.Key), Uri.EscapeDataString(header.Value));
             }
 
-            return builder.ToString(0, builder.Length - 1);
+            return builder.Length > 0 ? builder.ToString(0, builder.Length - 1) : string.Empty;
         }
     }
 }
