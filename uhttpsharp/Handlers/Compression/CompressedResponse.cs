@@ -24,11 +24,11 @@ namespace uhttpsharp.Handlers.Compression
             _closeConnection = child.CloseConnection;
             _headers =
                 new ListHttpHeaders(
-                    child.Headers.Where(h => !h.Key.Equals("content-length", StringComparison.InvariantCultureIgnoreCase))
+                    child.Headers.Where(h => !h.Key.Equals("Content-Length", StringComparison.InvariantCultureIgnoreCase))
                         .Concat(new[]
                         {
-                            new KeyValuePair<string, string>("content-length", memoryStream.Length.ToString(CultureInfo.InvariantCulture)),
-                            new KeyValuePair<string, string>("content-encoding", encoding), 
+                            new KeyValuePair<string, string>("Content-Length", memoryStream.Length.ToString(CultureInfo.InvariantCulture)),
+                            new KeyValuePair<string, string>("Content-Encoding", encoding), 
                         })
                         .ToList());
 

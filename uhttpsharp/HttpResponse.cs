@@ -85,9 +85,9 @@ namespace uhttpsharp
             return new StreamHttpResponse(body, code, new ListHttpHeaders(new[]
             {
                 new KeyValuePair<string, string>("Date", DateTime.UtcNow.ToString("R")),
-                new KeyValuePair<string, string>("content-type", contentType),
-                new KeyValuePair<string, string>("connection", keepAlive ? "keep-alive" : "close"), 
-                new KeyValuePair<string, string>("content-length", body.Length.ToString(CultureInfo.InvariantCulture)), 
+                new KeyValuePair<string, string>("Content-Type", contentType),
+                new KeyValuePair<string, string>("Connection", keepAlive ? "Keep-Alive" : "Close"), 
+                new KeyValuePair<string, string>("Content-Length", body.Length.ToString(CultureInfo.InvariantCulture)), 
             }));
         }
 
@@ -112,9 +112,9 @@ namespace uhttpsharp
             return new EmptyHttpResponse(code, new ListHttpHeaders(new[]
             {
                 new KeyValuePair<string, string>("Date", DateTime.UtcNow.ToString("R")),
-                new KeyValuePair<string, string>("content-type", "text/html"),
-                new KeyValuePair<string, string>("connection", keepAlive ? "keep-alive" : "close"), 
-                new KeyValuePair<string, string>("content-length", "0"), 
+                //new KeyValuePair<string, string>("Content-Type", "text/html"),
+                new KeyValuePair<string, string>("Connection", keepAlive ? "Keep-Alive" : "Close"), 
+                new KeyValuePair<string, string>("Content-Length", "0"), 
             }));
         }
 
@@ -144,9 +144,9 @@ namespace uhttpsharp
             return new StringHttpResponse(body, code, new CompositeHttpHeaders(new ListHttpHeaders(new[]
             {
                 new KeyValuePair<string, string>("Date", DateTime.UtcNow.ToString("R")),
-                new KeyValuePair<string, string>("content-type", contentType),
-                new KeyValuePair<string, string>("connection", keepAlive ? "keep-alive" : "close"), 
-                new KeyValuePair<string, string>("content-length", Encoding.UTF8.GetByteCount(body).ToString(CultureInfo.InvariantCulture)), 
+                new KeyValuePair<string, string>("Content-Type", contentType),
+                new KeyValuePair<string, string>("Connection", keepAlive ? "Keep-Alive" : "Close"), 
+                new KeyValuePair<string, string>("Content-Length", Encoding.UTF8.GetByteCount(body).ToString(CultureInfo.InvariantCulture)), 
             }), headers));
         }
 
