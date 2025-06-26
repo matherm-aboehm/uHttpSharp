@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace uhttpsharp
 {
@@ -111,11 +113,17 @@ namespace uhttpsharp
             _readLimit = readLimit;
             _writeLimit = writeLimit;
         }
+
+        public override void Close()
+        {
+            _child.Close();
+        }
+
         public override void Flush()
         {
             _child.Flush();
         }
-        
+
         public override long Seek(long offset, SeekOrigin origin)
         {
             return _child.Seek(offset, origin);
@@ -166,21 +174,22 @@ namespace uhttpsharp
         {
             var retVal = _child.ReadByte();
 
-            AssertReadLimit(1);
+            if (retVal != -1)
+                AssertReadLimit(1);
 
             return retVal;
         }
         public override void Write(byte[] buffer, int offset, int count)
         {
-            _child.Write(buffer, offset, count);
-
             AssertWriteLimit(count);
+
+            _child.Write(buffer, offset, count);
         }
         public override void WriteByte(byte value)
         {
-            _child.WriteByte(value);
-
             AssertWriteLimit(1);
+
+            _child.WriteByte(value);
         }
         public override bool CanRead
         {
@@ -190,10 +199,14 @@ namespace uhttpsharp
         {
             get { return _child.CanSeek; }
         }
-        
+
         public override bool CanWrite
         {
             get { return _child.CanWrite; }
+        }
+        public override bool CanTimeout
+        {
+            get { return _child.CanTimeout; }
         }
         public override long Length
         {
@@ -214,5 +227,48 @@ namespace uhttpsharp
             get { return _child.WriteTimeout; }
             set { _child.WriteTimeout = value; }
         }
+
+        #region async overrides
+
+        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            return _child.BeginRead(buffer, offset, count, callback, state);
+        }
+        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            AssertWriteLimit(count);
+
+            return _child.BeginWrite(buffer, offset, count, callback, state);
+        }
+        public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            return _child.CopyToAsync(destination, bufferSize, cancellationToken);
+        }
+        public override int EndRead(IAsyncResult asyncResult)
+        {
+            var retVal = _child.EndRead(asyncResult);
+
+            AssertReadLimit(retVal);
+
+            return retVal;
+        }
+        public override void EndWrite(IAsyncResult asyncResult)
+        {
+            _child.EndWrite(asyncResult);
+        }
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            return _child.FlushAsync(cancellationToken);
+        }
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _child.ReadAsync(buffer, offset, count, cancellationToken);
+        }
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _child.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        #endregion
     }
 }

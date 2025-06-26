@@ -29,6 +29,7 @@ using uhttpsharp.Clients;
 using uhttpsharp.Headers;
 using uhttpsharp.RequestProviders;
 using uhttpsharp.Logging;
+using System.Threading;
 
 namespace uhttpsharp
 {
@@ -38,7 +39,7 @@ namespace uhttpsharp
         private static readonly byte[] CrLfBuffer = Encoding.UTF8.GetBytes(CrLf);
 
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
-        
+
         private readonly IClient _client;
         private readonly Func<IHttpContext, Task> _requestHandler;
         private readonly IHttpRequestProvider _requestProvider;
@@ -52,7 +53,7 @@ namespace uhttpsharp
             _client = client;
             _requestHandler = requestHandler;
             _requestProvider = requestProvider;
-            
+
             Logger.InfoFormat("Got Client {0}", _remoteEndPoint);
 
             Task.Run(Process);
@@ -67,7 +68,7 @@ namespace uhttpsharp
                 await ((ClientSslDecorator)Client).AuthenticateAsServer().ConfigureAwait(false);
             }
 
-            _stream = new BufferedStream(_client.Stream, 8096);
+            _stream = new BufferedStream(_client.Stream, 8192);
         }
 
         private async Task Process()
@@ -79,11 +80,13 @@ namespace uhttpsharp
                 while (_client.Connected)
                 {
                     // TODO : Configuration.
-                    var limitedStream = new NotFlushingStream(new LimitedStream(_stream));
+                    //As long as there are no limits applied, don't use the LimitedStream wrapper at all.
+                    //new LimitedStream(_stream)
+                    var wrappedStream = new NotFlushingStream(_stream);
 
 
 
-                    var request = await _requestProvider.Provide(new MyStreamReader(limitedStream)).ConfigureAwait(false);
+                    var request = await _requestProvider.Provide(new MyStreamReader(wrappedStream)).ConfigureAwait(false);
 
                     if (request != null)
                     {
@@ -98,10 +101,10 @@ namespace uhttpsharp
 
                         if (context.Response != null)
                         {
-                            var streamWriter = new StreamWriter(limitedStream) { AutoFlush = false };
+                            var streamWriter = new StreamWriter(wrappedStream) { AutoFlush = false };
                             streamWriter.NewLine = "\r\n";
                             await WriteResponse(context, streamWriter).ConfigureAwait(false);
-                            await limitedStream.ExplicitFlushAsync().ConfigureAwait(false);
+                            await wrappedStream.ExplicitFlushAsync().ConfigureAwait(false);
 
                             if (!request.Headers.KeepAliveConnection() || context.Response.CloseConnection)
                             {
@@ -130,13 +133,13 @@ namespace uhttpsharp
         {
             IHttpResponse response = context.Response;
             IHttpRequest request = context.Request;
-    
+
             // Headers
             await writer.WriteLineAsync(string.Format("HTTP/1.1 {0} {1}",
                 (int)response.ResponseCode,
                 response.ResponseCode))
                 .ConfigureAwait(false);
-            
+
             foreach (var header in response.Headers)
             {
                 await writer.WriteLineAsync(string.Format("{0}: {1}", header.Key, header.Value)).ConfigureAwait(false);
@@ -151,12 +154,12 @@ namespace uhttpsharp
 
             // Empty Line
             await writer.WriteLineAsync().ConfigureAwait(false);
-            writer.Flush();
+            await writer.FlushAsync().ConfigureAwait(false);
 
             // Body
             await response.WriteBody(writer).ConfigureAwait(false);
             await writer.FlushAsync().ConfigureAwait(false);
-            
+
         }
 
         public IClient Client
@@ -179,7 +182,7 @@ namespace uhttpsharp
 
         private void UpdateLastOperationTime()
         {
-            // _lastOperationTime = DateTime.Now;
+            _lastOperationTime = DateTime.Now;
         }
 
     }
@@ -192,6 +195,10 @@ namespace uhttpsharp
             _child = child;
         }
 
+        public override void Close()
+        {
+            _child.Close();
+        }
 
         public void ExplicitFlush()
         {
@@ -246,6 +253,10 @@ namespace uhttpsharp
         {
             get { return _child.CanWrite; }
         }
+        public override bool CanTimeout
+        {
+            get { return _child.CanTimeout; }
+        }
         public override long Length
         {
             get { return _child.Length; }
@@ -265,6 +276,43 @@ namespace uhttpsharp
             get { return _child.WriteTimeout; }
             set { _child.WriteTimeout = value; }
         }
+
+        #region async overrides
+
+        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            return _child.BeginRead(buffer, offset, count, callback, state);
+        }
+        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            return _child.BeginWrite(buffer, offset, count, callback, state);
+        }
+        public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            return _child.CopyToAsync(destination, bufferSize, cancellationToken);
+        }
+        public override int EndRead(IAsyncResult asyncResult)
+        {
+            return _child.EndRead(asyncResult);
+        }
+        public override void EndWrite(IAsyncResult asyncResult)
+        {
+            _child.EndWrite(asyncResult);
+        }
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _child.ReadAsync(buffer, offset, count, cancellationToken);
+        }
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _child.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        #endregion
     }
 
     public static class RequestHandlersAggregateExtensions
@@ -284,7 +332,7 @@ namespace uhttpsharp
 
             var currentHandler = handlers[index];
             var nextHandler = handlers.Aggregate(index + 1);
-            
+
             return context => currentHandler.Handle(context, () => nextHandler(context));
         }
 
