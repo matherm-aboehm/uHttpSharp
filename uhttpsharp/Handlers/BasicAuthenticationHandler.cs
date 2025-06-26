@@ -8,7 +8,7 @@ using uhttpsharp.Headers;
 
 namespace uhttpsharp.Handlers
 {
-   
+
     public class BasicAuthenticationHandler : IHttpRequestHandler
     {
         private static readonly string BasicPrefix = "Basic ";
@@ -34,7 +34,7 @@ namespace uhttpsharp.Handlers
         {
             IDictionary<string, dynamic> session = context.State.Session;
             dynamic ipAddress;
-            
+
             if (!session.TryGetValue(_authenticationKey, out ipAddress) || ipAddress != context.RemoteEndPoint)
             {
                 if (TryAuthenticate(context, session))
@@ -47,7 +47,7 @@ namespace uhttpsharp.Handlers
                     headers:
                             _headers);
 
-                return Task.Factory.GetCompleted();
+                return Task.CompletedTask;
             }
 
             return next();

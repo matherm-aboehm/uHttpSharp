@@ -35,11 +35,11 @@ namespace uhttpsharpdemo.Handlers
             _keepAliveResponse = new HttpResponse(HttpResponseCode.Ok, contents, true);
             _response = new HttpResponse(HttpResponseCode.Ok, contents, false);
         }
-        
+
         public Task Handle(IHttpContext context, Func<Task> next)
         {
             context.Response = context.Request.Headers.KeepAliveConnection() ? _keepAliveResponse : _response;
-            return Task.Factory.GetCompleted();
+            return Task.CompletedTask;
         }
     }
 }

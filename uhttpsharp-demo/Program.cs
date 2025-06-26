@@ -61,7 +61,7 @@ namespace uhttpsharpdemo
                     .With("about", new AboutHandler())
                     .With("Assets", new AboutHandler())
                     .With("strings", new RestHandler<string>(new StringsRestController(), JsonResponseProvider.Default)));
-                
+
                 httpServer.Use(new ClassRouter(new MySuperHandler()));
                 httpServer.Use(new TimingHandler());
 
@@ -89,13 +89,13 @@ namespace uhttpsharpdemo
         {
             get
             {
-                _index++; return this; 
+                _index++; return this;
             }
         }
         public Task Handle(IHttpContext context, Func<Task> next)
         {
             context.Response = uhttpsharp.HttpResponse.CreateWithMessage(HttpResponseCode.Ok, "Hello!" + _index, true);
-            return Task.Factory.GetCompleted();
+            return Task.CompletedTask;
         }
 
 
@@ -129,9 +129,9 @@ namespace uhttpsharpdemo
         {
             var model = new ModelBinder(new ObjectActivator()).Get<MyModel>(context.Request.QueryString);
 
-            return Task.Factory.GetCompleted();
+            return Task.CompletedTask;
         }
     }
 
-    
+
 }

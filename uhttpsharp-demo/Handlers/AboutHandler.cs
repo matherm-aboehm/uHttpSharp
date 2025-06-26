@@ -30,7 +30,7 @@ namespace uhttpsharpdemo.Handlers
         {
             context.Response = HttpResponse.CreateWithMessage(HttpResponseCode.Ok, "Sample http-request-handler", context.Request.Headers.KeepAliveConnection());
 
-            return Task.Factory.GetCompleted();
+            return Task.CompletedTask;
         }
     }
 }

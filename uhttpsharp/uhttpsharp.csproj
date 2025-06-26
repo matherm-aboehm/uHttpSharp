@@ -123,7 +123,6 @@
     <Compile Include="RequestProviders\HttpRequestProviderMethodOverrideDecorator.cs" />
     <Compile Include="RequestProviders\IHttpRequestProvider.cs" />
     <Compile Include="RequestProviders\IStreamReader.cs" />
-    <Compile Include="TaskFactoryExtensions.cs" />
     <Compile Include="Clients\TcpClientAdapter.cs" />
   </ItemGroup>
   <ItemGroup>

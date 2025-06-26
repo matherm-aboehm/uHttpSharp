@@ -120,7 +120,7 @@ namespace uhttpsharp
 
         public override Task WriteBody(StreamWriter writer)
         {
-            return Task.Factory.GetCompleted();
+            return Task.CompletedTask;
         }
     }
 
