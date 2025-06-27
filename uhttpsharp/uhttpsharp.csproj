@@ -101,6 +101,8 @@
     <Compile Include="HttpMethodProvider.cs" />
     <Compile Include="HttpMethodProviderCache.cs" />
     <Compile Include="HttpMethods.cs" />
+    <Compile Include="HttpProtocolVersionProvider.cs" />
+    <Compile Include="HttpProtocolVersionProviderCache.cs" />
     <Compile Include="HttpRequest.cs" />
     <Compile Include="HttpRequestHandler.cs" />
     <Compile Include="Handlers\HttpRouter.cs" />
@@ -109,6 +111,7 @@
     <Compile Include="HttpServerExtensions.cs" />
     <Compile Include="IHttpContext.cs" />
     <Compile Include="IHttpMethodProvider.cs" />
+    <Compile Include="IHttpProtocolVersionProvider.cs" />
     <Compile Include="LimitedStream.cs" />
     <Compile Include="Listeners\IHttpListener.cs" />
     <Compile Include="Listeners\SslListenerDecoerator.cs" />

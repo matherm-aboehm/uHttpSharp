@@ -46,7 +46,8 @@ namespace uhttpsharp.RequestProviders
 
     class MyStreamReader : IStreamReader
     {
-        private const int BufferSize = 8096 / 4;
+        private static readonly Encoding SafeAsciiEncoding = Encoding.GetEncoding(Encoding.ASCII.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+        private const int BufferSize = 8192 / 4;
         private readonly Stream _underlyingStream;
 
         private readonly byte[] _middleBuffer = new byte[BufferSize];
@@ -58,47 +59,59 @@ namespace uhttpsharp.RequestProviders
             _underlyingStream = underlyingStream;
         }
 
-        private async Task ReadBuffer()
+        private async Task<bool> ReadBuffer()
         {
-            do
-            {
-                _count = await _underlyingStream.ReadAsync(_middleBuffer, 0, BufferSize).ConfigureAwait(false);
+            //do
+            //{
+            _count = await _underlyingStream.ReadAsync(_middleBuffer, 0, BufferSize).ConfigureAwait(false);
 
-                if (_count == 0)
-                {
-                    // Fix for 100% CPU
-                    await Task.Delay(100).ConfigureAwait(false);
-                }
+            /*if (_count == 0)
+            {
+                // Fix for 100% CPU
+                await Task.Delay(100).ConfigureAwait(false);
             }
-            while (_count == 0);
+            }
+            while (_count == 0);*/
 
             _index = 0;
+            return _count != 0;
         }
 
         public async Task<string> ReadLine()
         {
-            var builder = new StringBuilder(64);
+            //HINT: Using plain StringBuilder would be faster but doesn't check for encoding errors.
+            //Using StringBuilder in combination with Encoding.GetString() for each character would be much slower
+            //than doing it only once for byte array, so instead using MemoryStream for buffer.
+            var builder = new MemoryStream(64);
 
             if (_index == _count)
             {
-                await ReadBuffer().ConfigureAwait(false);
+                if (!await ReadBuffer().ConfigureAwait(false))
+                    return string.Empty;
             }
             var readByte = _middleBuffer[_index++];
+            byte lastByte = 0;
 
-            while (readByte != '\n' && (builder.Length == 0 || builder[builder.Length - 1] != '\r'))
+            while (readByte != '\n' && (builder.Length == 0 || lastByte != '\r'))
             {
-                builder.Append((char)readByte);
+                lastByte = readByte;
+                builder.WriteByte(readByte);
 
                 if (_index == _count)
                 {
-                    await ReadBuffer().ConfigureAwait(false);
+                    if (!await ReadBuffer().ConfigureAwait(false))
+                        break;
                 }
                 readByte = _middleBuffer[_index++];
             }
 
             //Debug.WriteLine("Readline : " + sw.ElapsedMilliseconds);
 
-            return builder.ToString(0, builder.Length - 1);
+            if (lastByte == '\r')
+                builder.SetLength(builder.Length - 1);
+            if (builder.Length == 0)
+                return string.Empty;
+            return SafeAsciiEncoding.GetString(builder.ToArray());
         }
 
         public async Task<byte[]> ReadBytes(int count)
@@ -118,7 +131,10 @@ namespace uhttpsharp.RequestProviders
             // Read from stream
             while (currentByte < count)
             {
-                currentByte += await _underlyingStream.ReadAsync(buffer, currentByte, count - currentByte).ConfigureAwait(false);
+                var readCount = await _underlyingStream.ReadAsync(buffer, currentByte, count - currentByte).ConfigureAwait(false);
+                if (readCount == 0)
+                    throw new IOException($"Unexpectedly reached end of stream. {(count - currentByte)} bytes not received.");
+                currentByte += readCount;
             }
 
             //Debug.WriteLine("ReadBytes(" + count + ") : " + sw.ElapsedMilliseconds);
