@@ -29,6 +29,11 @@ namespace uhttpsharp.RequestProviders
             get { return _child.Protocol; }
         }
 
+        public Version ProtocolVersion
+        {
+            get { return _child.ProtocolVersion; }
+        }
+
         public Uri Uri
         {
             get { return _child.Uri; }

@@ -30,6 +30,7 @@ namespace uhttpsharp
         private readonly IHttpHeaders _headers;
         private readonly HttpMethods _method;
         private readonly string _protocol;
+        private readonly Version _protocolVersion;
         private readonly Uri _uri;
         private readonly string[] _requestParameters;
         private readonly IHttpHeaders _queryString;
@@ -40,6 +41,7 @@ namespace uhttpsharp
             _headers = headers;
             _method = method;
             _protocol = protocol;
+            _protocolVersion = HttpProtocolVersionProvider.Default.Provide(protocol);
             _uri = uri;
             _requestParameters = requestParameters;
             _queryString = queryString;
@@ -59,6 +61,11 @@ namespace uhttpsharp
         public string Protocol
         {
             get { return _protocol; }
+        }
+
+        public Version ProtocolVersion
+        {
+            get { return _protocolVersion; }
         }
 
         public Uri Uri
@@ -104,11 +111,13 @@ namespace uhttpsharp
 
         string Protocol { get; }
 
+        Version ProtocolVersion { get; }
+
         Uri Uri { get; }
 
         string[] RequestParameters { get; }
 
-        IHttpPost Post {get;}
+        IHttpPost Post { get; }
 
         IHttpHeaders QueryString { get; }
 
@@ -117,9 +126,9 @@ namespace uhttpsharp
     public interface IHttpPost
     {
 
-        byte[] Raw {get;}
+        byte[] Raw { get; }
 
-        IHttpHeaders Parsed {get;}
+        IHttpHeaders Parsed { get; }
 
     }
 
