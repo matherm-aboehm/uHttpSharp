@@ -135,7 +135,8 @@ namespace uhttpsharp
             IHttpRequest request = context.Request;
 
             // Headers
-            await writer.WriteLineAsync(string.Format("HTTP/1.1 {0} {1}",
+            await writer.WriteLineAsync(string.Format("{0} {1} {2}",
+                string.IsNullOrEmpty(request.Protocol) ? "HTTP/1.1" : request.Protocol,
                 (int)response.ResponseCode,
                 response.ResponseCode))
                 .ConfigureAwait(false);
