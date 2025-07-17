@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using uhttpsharp.Listeners;
 using uhttpsharp.RequestProviders;
 using uhttpsharp.Logging;
+using System.Linq;
 using System.Threading;
 
 namespace uhttpsharp
@@ -109,12 +110,7 @@ namespace uhttpsharp
 
                 if (disposing)
                 {
-                    var awaitAllTask = Task.WhenAll(_runningListeners);
-                    if (!awaitAllTask.IsCompleted)
-                        awaitAllTask.RunSynchronously();
-                    //HINT: Calling Wait() is needed even though RunSynchronously() was called, so exceptions are fired.
-                    //see remarks: https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.task.runsynchronously?view=net-9.0
-                    awaitAllTask.Wait();
+                    Task.WaitAll(_runningListeners.ToArray());
                     _ctsDispose.Dispose();
                 }
             }
