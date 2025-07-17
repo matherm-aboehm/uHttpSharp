@@ -334,7 +334,7 @@ namespace uhttpsharp
             var currentHandler = handlers[index];
             var nextHandler = handlers.Aggregate(index + 1);
 
-            return context => currentHandler.Handle(context, () => nextHandler(context));
+            return context => currentHandler.Handle(context, () => nextHandler != null ? nextHandler(context) : Task.CompletedTask);
         }
 
 
