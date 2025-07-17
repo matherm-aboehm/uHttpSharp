@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using uhttpsharp.Listeners;
 using uhttpsharp.RequestProviders;
 using uhttpsharp.Logging;
+using System.Threading;
 
 namespace uhttpsharp
 {
@@ -36,6 +37,7 @@ namespace uhttpsharp
         private readonly IList<IHttpRequestHandler> _handlers = new List<IHttpRequestHandler>();
         private readonly IList<(IHttpListener, bool)> _listeners = new List<(IHttpListener, bool)>();
         private readonly IList<Task> _runningListeners = new List<Task>();
+        private readonly CancellationTokenSource _ctsDispose = new CancellationTokenSource();
         private readonly IHttpRequestProvider _requestProvider;
 
 
@@ -65,7 +67,7 @@ namespace uhttpsharp
             {
                 IHttpListener tempListener = listener;
 
-                var task = Task.Run(() => Listen(tempListener));
+                var task = Task.Run(() => Listen(tempListener, _ctsDispose.Token), _ctsDispose.Token);
                 if (ownsListener)
                     task = task.ContinueWith((_) => tempListener.Dispose());
                 _runningListeners.Add(task);
@@ -74,7 +76,7 @@ namespace uhttpsharp
             Logger.InfoFormat("Embedded uhttpserver started.");
         }
 
-        private async Task Listen(IHttpListener listener)
+        private async Task Listen(IHttpListener listener, CancellationToken cancellationToken)
         {
             var aggregatedHandler = _handlers.Aggregate();
 
@@ -82,7 +84,11 @@ namespace uhttpsharp
             {
                 try
                 {
-                    new HttpClientHandler(await listener.GetClient().ConfigureAwait(false), aggregatedHandler, _requestProvider);
+                    new HttpClientHandler(await listener.GetClient(cancellationToken).ConfigureAwait(false), aggregatedHandler, _requestProvider);
+                }
+                catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
+                {
+                    // ignore when it was canceled by _ctsDispose
                 }
                 catch (Exception e)
                 {
@@ -99,6 +105,7 @@ namespace uhttpsharp
             {
                 _isActive = false;
                 _isDisposed = true;
+                _ctsDispose.Cancel();
 
                 if (disposing)
                 {
@@ -108,6 +115,7 @@ namespace uhttpsharp
                     //HINT: Calling Wait() is needed even though RunSynchronously() was called, so exceptions are fired.
                     //see remarks: https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.task.runsynchronously?view=net-9.0
                     awaitAllTask.Wait();
+                    _ctsDispose.Dispose();
                 }
             }
         }
@@ -123,6 +131,7 @@ namespace uhttpsharp
         {
             Dispose(false);
             await Task.WhenAll(_runningListeners).ConfigureAwait(false);
+            _ctsDispose.Dispose();
             GC.SuppressFinalize(this);
         }
 

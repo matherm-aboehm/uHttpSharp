@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using uhttpsharp.Clients;
 
@@ -15,9 +16,9 @@ namespace uhttpsharp.Listeners
             _certificate = certificate;
         }
 
-        public async Task<IClient> GetClient()
+        public async Task<IClient> GetClient(CancellationToken cancellationToken = default(CancellationToken))
         {
-            return new ClientSslDecorator(await _child.GetClient().ConfigureAwait(false), _certificate);
+            return new ClientSslDecorator(await _child.GetClient(cancellationToken).ConfigureAwait(false), _certificate);
         }
 
         public void Dispose()
