@@ -55,8 +55,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="HttpProtocolVersionProviderCacheTests.cs" />
     <Compile Include="HttpMethodProviderCacheTests.cs" />
     <Compile Include="HttpMethodProviderTests.cs" />
+    <Compile Include="HttpProtocolVersionProviderTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
