@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -46,7 +47,7 @@ namespace uhttpsharp.RequestProviders
 
     class MyStreamReader : IStreamReader
     {
-        private const int BufferSize = 8096 / 4;
+        private const int BufferSize = 8192 / 4;
         private readonly Stream _underlyingStream;
 
         private readonly byte[] _middleBuffer = new byte[BufferSize];
@@ -58,21 +59,22 @@ namespace uhttpsharp.RequestProviders
             _underlyingStream = underlyingStream;
         }
 
-        private async Task ReadBuffer()
+        private async Task<bool> ReadBuffer()
         {
-            do
-            {
-                _count = await _underlyingStream.ReadAsync(_middleBuffer, 0, BufferSize).ConfigureAwait(false);
+            //do
+            //{
+            _count = await _underlyingStream.ReadAsync(_middleBuffer, 0, BufferSize).ConfigureAwait(false);
 
-                if (_count == 0)
-                {
-                    // Fix for 100% CPU
-                    await Task.Delay(100).ConfigureAwait(false);
-                }
+            /*if (_count == 0)
+            {
+                // Fix for 100% CPU
+                await Task.Delay(100).ConfigureAwait(false);
             }
-            while (_count == 0);
+            }
+            while (_count == 0);*/
 
             _index = 0;
+            return _count != 0;
         }
 
         public async Task<string> ReadLine()
@@ -81,7 +83,8 @@ namespace uhttpsharp.RequestProviders
 
             if (_index == _count)
             {
-                await ReadBuffer().ConfigureAwait(false);
+                if (!await ReadBuffer().ConfigureAwait(false))
+                    return string.Empty;
             }
             var readByte = _middleBuffer[_index++];
 
@@ -91,7 +94,8 @@ namespace uhttpsharp.RequestProviders
 
                 if (_index == _count)
                 {
-                    await ReadBuffer().ConfigureAwait(false);
+                    if (!await ReadBuffer().ConfigureAwait(false))
+                        break;
                 }
                 readByte = _middleBuffer[_index++];
             }
