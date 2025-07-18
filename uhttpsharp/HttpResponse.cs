@@ -167,17 +167,17 @@ namespace uhttpsharp
         private readonly HttpResponseCode _responseCode;
 
         public HttpResponse(HttpResponseCode code, string content, bool closeConnection)
-            : this(code, "text/html; charset=utf-8", StringToStream(content), closeConnection)
+            : this(code, "text/html; charset=utf-8", StringToStream(content), !closeConnection)
         {
         }
 
         public HttpResponse(HttpResponseCode code, string content, IEnumerable<KeyValuePair<string,string>> headers, bool closeConnection)
-            : this(code, "text/html; charset=utf-8", StringToStream(content), closeConnection,headers)
+            : this(code, "text/html; charset=utf-8", StringToStream(content), !closeConnection,headers)
         {
         }
 
-        public HttpResponse(string contentType, Stream contentStream, bool closeConnection)
-            : this(HttpResponseCode.Ok, contentType, contentStream, closeConnection)
+        public HttpResponse(string contentType, Stream contentStream, bool keepAliveConnection)
+            : this(HttpResponseCode.Ok, contentType, contentStream, keepAliveConnection)
         {
         }
 
@@ -214,7 +214,7 @@ namespace uhttpsharp
                 code,
                 string.Format(
                     "<html><head><title>{0}</title></head><body><h1>{0}</h1><hr>{1}</body></html>",
-                    message, body), keepAliveConnection);
+                    message, body), !keepAliveConnection);
         }
         private static MemoryStream StringToStream(string content)
         {
