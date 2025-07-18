@@ -142,27 +142,62 @@ namespace uhttpsharp.RequestProviders
 
         public async Task<byte[]> ReadBytes(int count)
         {
+            bool continueReading = false; // means reading a fixed count of bytes
+            if (count == -1)
+            {
+                count = BufferSize;
+                continueReading = true;
+            }
             var buffer = new byte[count];
             int currentByte = 0;
 
             // Empty the buffer
-            int bytesToRead = Math.Min(_count - _index, count) + _index;
-            for (int i = _index; i < bytesToRead; i++)
+            int bytesToRead = Math.Min(_count - _index, count);
+            if (bytesToRead != 0)
             {
-                buffer[currentByte++] = _middleBuffer[i];
+                Buffer.BlockCopy(_middleBuffer, _index, buffer, 0, bytesToRead);
+                currentByte += bytesToRead;
             }
 
             _index = _count;
 
             // Read from stream
-            while (currentByte < count)
+            do
             {
-                currentByte += await _underlyingStream.ReadAsync(buffer, currentByte, count - currentByte).ConfigureAwait(false);
-            }
+                while (currentByte < count)
+                {
+                    var readCount = await _underlyingStream.ReadAsync(buffer, currentByte, count - currentByte).ConfigureAwait(false);
+                    if (readCount == 0)
+                    {
+                        if (!continueReading)
+                            throw new IOException($"Unexpectedly reached end of stream. {(count - currentByte)} bytes not received.");
+                        else
+                        {
+                            continueReading = false;
+                            break;
+                        }
+                    }
+                    currentByte += readCount;
+                }
+                if (continueReading)
+                {
+                    count += BufferSize;
+                    byte[] oldbuffer = buffer;
+                    buffer = new byte[count];
+                    Buffer.BlockCopy(oldbuffer, 0, buffer, 0, oldbuffer.Length);
+                }
+            } while (continueReading);
 
             //Debug.WriteLine("ReadBytes(" + count + ") : " + sw.ElapsedMilliseconds);
 
-            return buffer;
+            if (currentByte == count)
+                return buffer;
+            else
+            {
+                byte[] result = new byte[currentByte];
+                Buffer.BlockCopy(buffer, 0, result, 0, currentByte);
+                return result;
+            }
         }
     }
 }
