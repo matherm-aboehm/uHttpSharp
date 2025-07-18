@@ -9,6 +9,7 @@ namespace uhttpsharp.RequestProviders
 {
     public interface IStreamReader
     {
+        int LastReadBytesCount { get; }
 
         Task<string> ReadLine();
 
@@ -22,6 +23,11 @@ namespace uhttpsharp.RequestProviders
         public StreamReaderAdapter(StreamReader reader)
         {
             _reader = reader;
+        }
+
+        public int LastReadBytesCount
+        {
+            get { throw new NotImplementedException(); }
         }
 
         public async Task<string> ReadLine()
@@ -55,11 +61,17 @@ namespace uhttpsharp.RequestProviders
         private readonly byte[] _middleBuffer = new byte[BufferSize];
         private int _index;
         private int _count;
+        private int _lastReadBytesCount;
 
         public MyStreamReader(Stream underlyingStream, Encoding encoding = null)
         {
             _underlyingStream = underlyingStream;
             _encoding = encoding ?? SafeAsciiEncoding;
+        }
+
+        public int LastReadBytesCount
+        {
+            get { return _lastReadBytesCount; }
         }
 
         private async Task<bool> ReadBuffer()
@@ -87,6 +99,7 @@ namespace uhttpsharp.RequestProviders
             //than doing it only once for byte array, so instead using MemoryStream for buffer.
             var builder = new MemoryStream(64);
 
+            _lastReadBytesCount = 0;
             if (_index == _count)
             {
                 if (!await ReadBuffer().ConfigureAwait(false))
@@ -102,6 +115,7 @@ namespace uhttpsharp.RequestProviders
 
                 if (_index == _count)
                 {
+                    _lastReadBytesCount += _count - startIndex;
                     builder.Write(_middleBuffer, startIndex, _count - startIndex - (lastByte == '\r' ? 1 : 0));
                     startIndex = 0;
                     if (!await ReadBuffer().ConfigureAwait(false))
@@ -110,6 +124,7 @@ namespace uhttpsharp.RequestProviders
                 readByte = _middleBuffer[_index++];
             }
             int count = _count == 0 ? 0 : _index - 1;
+            _lastReadBytesCount += _index - startIndex;
 
             //Debug.WriteLine("Readline : " + sw.ElapsedMilliseconds);
 
