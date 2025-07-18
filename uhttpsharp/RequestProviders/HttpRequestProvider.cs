@@ -55,7 +55,7 @@ namespace uhttpsharp.RequestProviders
             {
                 string currentLine = line;
 
-                var headerKvp = SplitHeader(currentLine);
+                var headerKvp = currentLine.SplitHeader();
                 headersRaw.Add(headerKvp);
             }
 
@@ -91,10 +91,38 @@ namespace uhttpsharp.RequestProviders
         private static async Task<IHttpPost> GetPostData(IStreamReader streamReader, IHttpHeaders headers)
         {
             int postContentLength;
+            string transferEncoding = null;
             IHttpPost post;
-            if (headers.TryGetByName("content-length", out postContentLength) && postContentLength > 0)
+            //https://stackoverflow.com/questions/16339198/which-http-methods-require-a-body
+            if ((headers.TryGetByName("content-length", out postContentLength) && postContentLength > 0) ||
+                headers.TryGetByName("transfer-encoding", out transferEncoding))
             {
+                bool allowTrailers = false;
+                if (postContentLength == 0 && transferEncoding != null &&
+                    transferEncoding.IndexOf("chunked", StringComparison.InvariantCultureIgnoreCase) != -1)
+                {
+                    postContentLength = -1;
+                    if (headers.TryGetByName("te", out var acceptedTransferEncoding) &&
+                        acceptedTransferEncoding.IndexOf("trailers", StringComparison.InvariantCultureIgnoreCase) != -1)
+                        allowTrailers = true;
+                    streamReader = new ChunkedStreamReader(streamReader, allowTrailers);
+                }
                 post = await HttpPost.Create(streamReader, postContentLength, Logger).ConfigureAwait(false);
+
+                if (allowTrailers && headers is IHttpHeadersAppendable appendableHeaders)
+                {
+                    var headersRaw = new List<KeyValuePair<string, string>>();
+
+                    // get the trailing headers
+                    string line;
+                    while (!string.IsNullOrEmpty(line = await streamReader.ReadLine().ConfigureAwait(false)))
+                    {
+                        headersRaw.Add(line.SplitHeader());
+                    }
+
+                    IHttpHeaders trailingHeaders = new HttpHeaders(headersRaw.ToDictionary(k => k.Key, k => k.Value, StringComparer.InvariantCultureIgnoreCase));
+                    appendableHeaders.AppendHeaders(trailingHeaders);
+                }
             }
             else
             {
@@ -102,12 +130,5 @@ namespace uhttpsharp.RequestProviders
             }
             return post;
         }
-
-        private KeyValuePair<string, string> SplitHeader(string header)
-        {
-            var index = header.IndexOf(": ", StringComparison.InvariantCultureIgnoreCase);
-            return new KeyValuePair<string, string>(header.Substring(0, index), header.Substring(index + 2));
-        }
-
     }
 }

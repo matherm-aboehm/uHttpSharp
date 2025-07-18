@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using uhttpsharp.Headers;
 
 namespace uhttpsharp.RequestProviders
 {
@@ -198,6 +199,52 @@ namespace uhttpsharp.RequestProviders
                 Buffer.BlockCopy(buffer, 0, result, 0, currentByte);
                 return result;
             }
+        }
+    }
+
+    class ChunkedStreamReader : IStreamReader
+    {
+        private readonly IStreamReader _child;
+        private readonly bool _allowTrailers;
+
+        public ChunkedStreamReader(IStreamReader child, bool allowTrailers)
+        {
+            _child = child;
+            _allowTrailers = allowTrailers;
+        }
+
+        public int LastReadBytesCount => _child.LastReadBytesCount;
+
+        public Task<string> ReadLine()
+        {
+            return _child.ReadLine();
+        }
+
+        public async Task<byte[]> ReadBytes(int count)
+        {
+            if (count != -1)
+                throw new ArgumentOutOfRangeException(nameof(count), count,
+                    "ChunkedStreamReader doesn't currently support fixed-size reading. It can only read until the end of the stream.");
+            MemoryStream buffer = new MemoryStream();
+            string line;
+            while (!string.IsNullOrEmpty(line = await _child.ReadLine().ConfigureAwait(false)))
+            {
+                var (chunkSizeString, chunkParams) = line.SplitHeaderValue();
+                if (ulong.TryParse(chunkSizeString, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var chunkSize))
+                {
+                    if (chunkSize > 0)
+                    {
+                        var chunkBytes = await _child.ReadBytes((int)chunkSize).ConfigureAwait(false);
+                        buffer.Write(chunkBytes, 0, chunkBytes.Length);
+                        line = await _child.ReadLine().ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(line) || _child.LastReadBytesCount != 2)
+                            throw new InvalidOperationException("the chunk was not correctly terminated by CRLF");
+                    }
+                    else if (_allowTrailers)
+                        break;
+                }
+            }
+            return buffer.ToArray();
         }
     }
 }

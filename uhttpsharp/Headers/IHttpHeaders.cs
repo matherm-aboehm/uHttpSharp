@@ -10,4 +10,9 @@ namespace uhttpsharp.Headers
         bool TryGetByName(string name, out string value);
 
     }
+
+    public interface IHttpHeadersAppendable : IHttpHeaders
+    {
+        void AppendHeaders(IHttpHeaders headers);
+    }
 }

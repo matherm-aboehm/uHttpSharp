@@ -139,7 +139,7 @@ namespace uhttpsharp.Headers
 
     [DebuggerDisplay("{Count} Headers")]
     [DebuggerTypeProxy(typeof(HttpHeadersDebuggerProxy))]
-    public class HttpHeaders : IHttpHeaders
+    public class HttpHeaders : IHttpHeaders, IHttpHeadersAppendable
     {
         private readonly IDictionary<string, string> _values;
 
@@ -167,6 +167,13 @@ namespace uhttpsharp.Headers
             return GetEnumerator();
         }
 
+        public void AppendHeaders(IHttpHeaders headers)
+        {
+            foreach (var kvp in headers)
+            {
+                _values.Add(kvp);
+            }
+        }
 
         internal int Count
         {
