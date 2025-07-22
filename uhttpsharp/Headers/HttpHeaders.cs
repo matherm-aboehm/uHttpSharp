@@ -14,6 +14,7 @@ namespace uhttpsharp.Headers
     internal class EmptyHttpPost : IHttpPost
     {
         private static readonly byte[] _emptyBytes = new byte[0];
+        private static readonly Task<IHttpHeaders> _taskEmptyHeaders = Task.FromResult(EmptyHttpHeaders.Empty);
 
         public static readonly IHttpPost Empty = new EmptyHttpPost();
 
@@ -40,6 +41,14 @@ namespace uhttpsharp.Headers
             }
         }
 
+        public Task<IHttpHeaders> ParsedAsync
+        {
+            get
+            {
+                return _taskEmptyHeaders;
+            }
+        }
+
         #endregion
     }
 
@@ -57,11 +66,14 @@ namespace uhttpsharp.Headers
 
         private readonly Lazy<IHttpHeaders> _parsed;
 
+        private readonly Lazy<Task<IHttpHeaders>> _parsedAsync;
+
         public HttpPost(byte[] raw, int readBytes)
         {
             _raw = raw;
             _readBytes = readBytes;
             _parsed = new Lazy<IHttpHeaders>(Parse);
+            _parsedAsync = _parsed.ToAsyncLazy();
         }
 
         private IHttpHeaders Parse()
@@ -87,6 +99,14 @@ namespace uhttpsharp.Headers
             get
             {
                 return _parsed.Value;
+            }
+        }
+
+        public Task<IHttpHeaders> ParsedAsync
+        {
+            get
+            {
+                return _parsedAsync.Value;
             }
         }
 

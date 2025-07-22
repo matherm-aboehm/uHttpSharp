@@ -95,6 +95,7 @@
     <Compile Include="Headers\HttpHeadersDebuggerProxy.cs" />
     <Compile Include="Headers\HttpHeadersExtensions.cs" />
     <Compile Include="Headers\IHttpHeaders.cs" />
+    <Compile Include="Headers\LazyExtensions.cs" />
     <Compile Include="Headers\QueryStringHttpHeaders.cs" />
     <Compile Include="HttpClient.cs" />
     <Compile Include="HttpContext.cs" />

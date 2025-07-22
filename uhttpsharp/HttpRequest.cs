@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using uhttpsharp.Headers;
 
 namespace uhttpsharp
@@ -130,6 +131,7 @@ namespace uhttpsharp
 
         IHttpHeaders Parsed { get; }
 
+        Task<IHttpHeaders> ParsedAsync { get; }
     }
 
     public sealed class HttpRequestParameters
