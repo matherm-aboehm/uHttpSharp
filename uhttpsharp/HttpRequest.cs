@@ -134,6 +134,11 @@ namespace uhttpsharp
         Task<IHttpHeaders> ParsedAsync { get; }
     }
 
+    public interface IHttpPostWithBodyPart : IHttpPost
+    {
+        byte[] Body { get; }
+    }
+
     public sealed class HttpRequestParameters
     {
         private readonly string[] _params;

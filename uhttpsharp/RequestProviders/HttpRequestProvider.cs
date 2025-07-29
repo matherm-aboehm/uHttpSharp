@@ -107,7 +107,19 @@ namespace uhttpsharp.RequestProviders
                         allowTrailers = true;
                     streamReader = new ChunkedStreamReader(streamReader, allowTrailers);
                 }
-                post = await HttpPost.Create(streamReader, postContentLength, Logger).ConfigureAwait(false);
+
+                if (headers.IsMultipartContent(out var subType, out var boundary) && subType.Equals("form-data", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    post = await HttpMultipartPost.Create(streamReader, postContentLength, boundary, Logger).ConfigureAwait(false);
+                }
+                else if (subType != null && subType.Equals("form-data", StringComparison.InvariantCultureIgnoreCase)) //boundary attribute missing
+                {
+                    post = EmptyHttpPost.Empty;
+                }
+                else
+                {
+                    post = await HttpPost.Create(streamReader, postContentLength, Logger).ConfigureAwait(false);
+                }
 
                 if (allowTrailers && headers is IHttpHeadersAppendable appendableHeaders)
                 {
