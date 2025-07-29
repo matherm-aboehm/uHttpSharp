@@ -60,7 +60,6 @@ namespace uhttpsharp.RequestProviders
             }
 
             IHttpHeaders headers = new HttpHeaders(headersRaw.ToDictionary(k => k.Key, k => k.Value, StringComparer.InvariantCultureIgnoreCase));
-            IHttpPost post = await GetPostData(reader, headers).ConfigureAwait(false);
 
             string verb;
             if (!headers.TryGetByName("_method", out verb))
@@ -68,6 +67,7 @@ namespace uhttpsharp.RequestProviders
                 verb = tokens[0];
             }
             var httpMethod = HttpMethodProvider.Default.Provide(verb);
+            IHttpPost post = await GetPostData(reader, headers, httpMethod).ConfigureAwait(false);
             return new HttpRequest(headers, httpMethod, httpProtocol, uri,
                 uri.OriginalString.Split(Separators, StringSplitOptions.RemoveEmptyEntries), queryString, post);
         }
@@ -88,7 +88,7 @@ namespace uhttpsharp.RequestProviders
             return queryString;
         }
 
-        private static async Task<IHttpPost> GetPostData(IStreamReader streamReader, IHttpHeaders headers)
+        private static async Task<IHttpPost> GetPostData(IStreamReader streamReader, IHttpHeaders headers, HttpMethods method)
         {
             int postContentLength;
             string transferEncoding = null;
