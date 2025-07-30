@@ -30,6 +30,7 @@ using uhttpsharp.Headers;
 using uhttpsharp.RequestProviders;
 using uhttpsharp.Logging;
 using System.Threading;
+using System.Net.Security;
 
 namespace uhttpsharp
 {
@@ -66,6 +67,13 @@ namespace uhttpsharp
             if (Client is ClientSslDecorator)
             {
                 await ((ClientSslDecorator)Client).AuthenticateAsServer().ConfigureAwait(false);
+                var sslstream = (SslStream)_client.Stream;
+                if (!sslstream.IsAuthenticated)
+                {
+                    //the following throws InvalidOperationException with more specific message for not being authenticated
+                    //for error codes see: https://learn.microsoft.com/de-de/windows/win32/secauthn/schannel-error-codes-for-tls-and-ssl-alerts
+                    var cert = sslstream.RemoteCertificate;
+                }
             }
 
             _stream = new BufferedStream(_client.Stream, 8192);
