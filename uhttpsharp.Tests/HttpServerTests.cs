@@ -236,7 +236,7 @@ namespace uhttpsharp.Tests
                         fileContents = fileItem.Body;
                         fileItem.Parsed.TryGetByName("content-type", out contentType);
                     }
-                    context.Response = new HttpResponse(contentType, new MemoryStream(fileContents), request.Headers.KeepAliveConnection());
+                    context.Response = new HttpResponse(contentType, new MemoryStream(fileContents), request.KeepAliveConnection());
                     await next();
                 });
 

@@ -77,17 +77,7 @@ namespace uhttpsharp.RequestProviders
 
         private async Task<bool> ReadBuffer()
         {
-            //do
-            //{
             _count = await _underlyingStream.ReadAsync(_middleBuffer, 0, BufferSize).ConfigureAwait(false);
-
-            /*if (_count == 0)
-            {
-                // Fix for 100% CPU
-                await Task.Delay(100).ConfigureAwait(false);
-            }
-            }
-            while (_count == 0);*/
 
             _index = 0;
             return _count != 0;

@@ -38,7 +38,7 @@ namespace uhttpsharpdemo.Handlers
 
         public Task Handle(IHttpContext context, Func<Task> next)
         {
-            context.Response = context.Request.Headers.KeepAliveConnection() ? _keepAliveResponse : _response;
+            context.Response = context.Request.KeepAliveConnection() ? _keepAliveResponse : _response;
             return Task.CompletedTask;
         }
     }

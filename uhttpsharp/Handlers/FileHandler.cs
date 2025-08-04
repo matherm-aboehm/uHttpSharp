@@ -67,7 +67,7 @@ namespace uhttpsharp.Handlers
                 return;
             }
                 
-            context.Response = new HttpResponse(GetContentType(path), File.OpenRead(path), context.Request.Headers.KeepAliveConnection());
+            context.Response = new HttpResponse(GetContentType(path), File.OpenRead(path), context.Request.KeepAliveConnection());
         }
     }
 }

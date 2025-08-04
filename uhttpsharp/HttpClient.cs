@@ -85,6 +85,9 @@ namespace uhttpsharp
             {
                 await InitializeStream();
 
+                bool keepAlive = false;
+                int retryGetRequestCount = 0;
+
                 while (_client.Connected)
                 {
                     // TODO : Configuration.
@@ -92,12 +95,11 @@ namespace uhttpsharp
                     //new LimitedStream(_stream)
                     var wrappedStream = new NotFlushingStream(_stream);
 
-
-
                     var request = await _requestProvider.Provide(new MyStreamReader(wrappedStream)).ConfigureAwait(false);
 
                     if (request != null)
                     {
+                        retryGetRequestCount = 0;
                         UpdateLastOperationTime();
 
                         var context = new HttpContext(request, _client.RemoteEndPoint);
@@ -114,17 +116,30 @@ namespace uhttpsharp
                             await WriteResponse(context, streamWriter).ConfigureAwait(false);
                             await wrappedStream.ExplicitFlushAsync().ConfigureAwait(false);
 
-                            if (!request.Headers.KeepAliveConnection() || context.Response.CloseConnection)
+                            if (!request.KeepAliveConnection() || context.Response.CloseConnection)
                             {
                                 _client.Close();
+                            }
+                            else
+                            {
+                                keepAlive = true;
+                                //TODO: Also use configuration for a keep-alive timeout and send 408 status back if the timeout was hit.
+                                //see: https://en.wikipedia.org/wiki/HTTP_persistent_connection
                             }
                         }
 
                         UpdateLastOperationTime();
                     }
-                    else
+                    else if (!keepAlive)
                     {
                         _client.Close();
+                    }
+                    else
+                    {
+                        // Fix for 100% CPU
+                        await Task.Delay(100).ConfigureAwait(false);
+                        if (++retryGetRequestCount >= 10)
+                            keepAlive = false;
                     }
                 }
             }

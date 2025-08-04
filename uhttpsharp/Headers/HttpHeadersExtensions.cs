@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using uhttpsharp.Logging;
 
@@ -8,11 +9,13 @@ namespace uhttpsharp.Headers
 {
     public static class HttpHeadersExtensions
     {
-        public static bool KeepAliveConnection(this IHttpHeaders headers)
+        public static bool KeepAliveConnection(this IHttpRequest request)
         {
             string value;
-            return headers.TryGetByName("connection", out value)
-                && value.Equals("Keep-Alive", StringComparison.InvariantCultureIgnoreCase);
+            return request.ProtocolVersion == HttpVersion.Version11 ? (!request.Headers.TryGetByName("connection", out value)
+                || !value.Equals("Close", StringComparison.InvariantCultureIgnoreCase)) :
+                (request.ProtocolVersion == HttpVersion.Version10 && request.Headers.TryGetByName("connection", out value)
+                && value.Equals("Keep-Alive", StringComparison.InvariantCultureIgnoreCase));
         }
 
         internal static bool IsMultipartContent(this IHttpHeaders headers, out string subType, out string boundary)
