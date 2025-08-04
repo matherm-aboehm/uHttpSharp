@@ -31,24 +31,99 @@ using uhttpsharp.RequestProviders;
 using uhttpsharp.Logging;
 using System.Threading;
 using System.Net.Security;
+using System.Runtime.CompilerServices;
 
 namespace uhttpsharp
 {
-    internal sealed class HttpClientHandler
+    internal sealed class HttpClientHandler : IDisposable, IAsyncDisposable
     {
+        //HINT: Needs to be a class, because async code would use a copy of the struct value in the finally
+        // handler of a using block. If this type wouldn't be mutable, it could be declared as struct.
+        private class SafeAsyncLockContext : IDisposable
+        {
+            private readonly SemaphoreSlim _semaphore;
+            private bool _isTaken;
+            private int _threadIdWithLock;
+
+            public SafeAsyncLockContext()
+            {
+                _semaphore = new SemaphoreSlim(1, 1);
+                _isTaken = false;
+                _threadIdWithLock = -1;
+            }
+
+            public void Dispose()
+            {
+                if (_isTaken)
+                {
+                    _isTaken = false;
+                    _threadIdWithLock = -1;
+                    _semaphore.Release();
+                }
+            }
+
+            //HINT: Async locking with semaphore objects needs more handling
+            //see: https://stackoverflow.com/a/61806749/3518520
+            public async Task AcquireLockAsync()
+            {
+                bool isTaken = false;
+                do
+                {
+                    try
+                    {
+                    }
+                    finally
+                    {
+                        isTaken = await _semaphore.WaitAsync(TimeSpan.FromSeconds(1));
+                        _isTaken |= isTaken;
+                        if (isTaken)
+                            _threadIdWithLock = Thread.CurrentThread.ManagedThreadId;
+                    }
+                }
+                while (!isTaken);
+            }
+
+            public bool AcquireLock()
+            {
+                // Can lead to deadlocks when it tries to lock on the same thread twice, which
+                // can happen if this method is used from an async context.
+                if (_isTaken && _threadIdWithLock == Thread.CurrentThread.ManagedThreadId)
+                    return false;
+
+                bool isTaken = false;
+                do
+                {
+                    try
+                    {
+                    }
+                    finally
+                    {
+                        isTaken = _semaphore.Wait(TimeSpan.FromSeconds(1));
+                        _isTaken |= isTaken;
+                        if (isTaken)
+                            _threadIdWithLock = Thread.CurrentThread.ManagedThreadId;
+                    }
+                }
+                while (!isTaken);
+                return isTaken;
+            }
+        }
+
         internal const string CrLf = "\r\n";
         private static readonly byte[] CrLfBuffer = Encoding.UTF8.GetBytes(CrLf);
 
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+        private static readonly ConditionalWeakTable<HttpClientHandler, HttpServer> RunningHandlers = new ConditionalWeakTable<HttpClientHandler, HttpServer>();
 
         private readonly IClient _client;
         private readonly Func<IHttpContext, Task> _requestHandler;
         private readonly IHttpRequestProvider _requestProvider;
         private readonly EndPoint _remoteEndPoint;
+        private readonly SafeAsyncLockContext _requestSyncObj = new SafeAsyncLockContext();
         private DateTime _lastOperationTime;
         private Stream _stream;
 
-        public HttpClientHandler(IClient client, Func<IHttpContext, Task> requestHandler, IHttpRequestProvider requestProvider)
+        public HttpClientHandler(HttpServer server, IClient client, Func<IHttpContext, Task> requestHandler, IHttpRequestProvider requestProvider)
         {
             _remoteEndPoint = client.RemoteEndPoint;
             _client = client;
@@ -58,6 +133,7 @@ namespace uhttpsharp
             Logger.InfoFormat("Got Client {0}", _remoteEndPoint);
 
             Task.Run(Process);
+            RunningHandlers.Add(this, server);
 
             UpdateLastOperationTime();
         }
@@ -97,57 +173,76 @@ namespace uhttpsharp
 
                     var request = await _requestProvider.Provide(new MyStreamReader(wrappedStream)).ConfigureAwait(false);
 
-                    if (request != null)
+                    using (_requestSyncObj)
                     {
-                        retryGetRequestCount = 0;
-                        UpdateLastOperationTime();
-
-                        var context = new HttpContext(request, _client.RemoteEndPoint);
-
-                        Logger.InfoFormat("{1} : Got request {0}", request.Uri, _client.RemoteEndPoint);
-
-
-                        await _requestHandler(context).ConfigureAwait(false);
-
-                        if (context.Response != null)
+                        await _requestSyncObj.AcquireLockAsync();
+                        if (request != null)
                         {
-                            var streamWriter = new StreamWriter(wrappedStream) { AutoFlush = false };
-                            streamWriter.NewLine = CrLf;
-                            await WriteResponse(context, streamWriter).ConfigureAwait(false);
-                            await wrappedStream.ExplicitFlushAsync().ConfigureAwait(false);
+                            retryGetRequestCount = 0;
+                            UpdateLastOperationTime();
 
-                            if (!request.KeepAliveConnection() || context.Response.CloseConnection)
+                            var context = new HttpContext(request, _client.RemoteEndPoint);
+
+                            Logger.InfoFormat("{1} : Got request {0}", request.Uri, _client.RemoteEndPoint);
+
+
+                            await _requestHandler(context).ConfigureAwait(false);
+
+                            if (context.Response != null)
                             {
-                                _client.Close();
+                                var streamWriter = new StreamWriter(wrappedStream) { AutoFlush = false };
+                                streamWriter.NewLine = CrLf;
+                                await WriteResponse(context, streamWriter).ConfigureAwait(false);
+                                await wrappedStream.ExplicitFlushAsync().ConfigureAwait(false);
+
+                                if (!request.KeepAliveConnection() || context.Response.CloseConnection)
+                                {
+                                    _client.Close();
+                                }
+                                else
+                                {
+                                    keepAlive = true;
+                                    //TODO: Also use configuration for a keep-alive timeout and send 408 status back if the timeout was hit.
+                                    //see: https://en.wikipedia.org/wiki/HTTP_persistent_connection
+                                }
                             }
-                            else
-                            {
-                                keepAlive = true;
-                                //TODO: Also use configuration for a keep-alive timeout and send 408 status back if the timeout was hit.
-                                //see: https://en.wikipedia.org/wiki/HTTP_persistent_connection
-                            }
+
+                            UpdateLastOperationTime();
+                        }
+                        else if (!keepAlive)
+                        {
+                            _client.Close();
+                        }
+                        else
+                        {
+                            // Fix for 100% CPU
+                            await Task.Delay(100).ConfigureAwait(false);
+                            if (++retryGetRequestCount >= 10)
+                                keepAlive = false;
                         }
 
-                        UpdateLastOperationTime();
-                    }
-                    else if (!keepAlive)
-                    {
-                        _client.Close();
-                    }
-                    else
-                    {
-                        // Fix for 100% CPU
-                        await Task.Delay(100).ConfigureAwait(false);
-                        if (++retryGetRequestCount >= 10)
-                            keepAlive = false;
+                        // If it was disposed while lock was acquired, connection should be closed here,
+                        // because Dispose() was not able to do this.
+                        if (disposedValue && _client.Connected)
+                            _client.Close();
                     }
                 }
             }
             catch (Exception e)
             {
-                // Hate people who make bad calls.
-                Logger.WarnException(string.Format("Error while serving : {0}", _remoteEndPoint), e);
-                _client.Close();
+                if (!disposedValue)
+                {
+                    // Hate people who make bad calls.
+                    Logger.WarnException(string.Format("Error while serving : {0}", _remoteEndPoint), e);
+                }
+                if (_client.Connected)
+                    _client.Close();
+            }
+            finally
+            {
+                if (RunningHandlers.TryGetValue(this, out var server))
+                    server.RemoveRunningHandler(this);
+                RunningHandlers.Remove(this);
             }
 
             Logger.InfoFormat("Lost Client {0}", _remoteEndPoint);
@@ -191,6 +286,11 @@ namespace uhttpsharp
             get { return _client; }
         }
 
+        public HttpServer Server
+        {
+            get { return RunningHandlers.TryGetValue(this, out var server) ? server : null; }
+        }
+
         public void ForceClose()
         {
             _client.Close();
@@ -209,6 +309,58 @@ namespace uhttpsharp
             _lastOperationTime = DateTime.Now;
         }
 
+        #region IDisposable Support
+        private bool disposedValue = false;
+
+        void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                disposedValue = true;
+
+                if (disposing)
+                {
+                    using (_requestSyncObj)
+                    {
+                        if (_requestSyncObj.AcquireLock())
+                        {
+                            _stream = null;
+                            if (_client is IDisposable clientDisposable)
+                                clientDisposable.Dispose();
+                            else
+                                _client.Close();
+                        }
+                    }
+                }
+            }
+        }
+
+        ~HttpClientHandler()
+        {
+            Dispose(false);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        async ValueTask IAsyncDisposable.DisposeAsync()
+        {
+            Dispose(false);
+            using (_requestSyncObj)
+            {
+                await _requestSyncObj.AcquireLockAsync();
+                _stream = null;
+                if (_client is IDisposable clientDisposable)
+                    clientDisposable.Dispose();
+                else
+                    _client.Close();
+            }
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 
     internal class NotFlushingStream : Stream

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace uhttpsharp.Clients
 {
-    public class ClientSslDecorator : IClient
+    public class ClientSslDecorator : IClient, IDisposable
     {
         private readonly IClient _child;
         private readonly X509Certificate _certificate;
@@ -49,5 +49,36 @@ namespace uhttpsharp.Clients
         {
             get { return _child.RemoteEndPoint; }
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    if (_sslStream != null)
+                        _sslStream.Dispose();
+                    else
+                        (_child as IDisposable)?.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        ~ClientSslDecorator()
+        {
+            Dispose(false);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

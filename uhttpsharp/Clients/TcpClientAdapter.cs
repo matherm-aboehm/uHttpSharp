@@ -1,10 +1,11 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 
 namespace uhttpsharp.Clients
 {
-    public class TcpClientAdapter : IClient
+    public class TcpClientAdapter : IClient, IDisposable
     {
         private readonly TcpClient _client;
         private readonly NetworkStream _stream;
@@ -18,9 +19,9 @@ namespace uhttpsharp.Clients
             // They have been added because .net doesn't allow me to wait for data (ReadAsyncBlock).
             // Instead, I've added Task.Delay in MyStreamReader.ReadBuffer when
             // Read returns without data.
-            
+
             // See https://github.com/Code-Sharp/uHttpSharp/issues/14
-            
+
             // Read Timeout of one second.
             // _stream.ReadTimeout = 1000;
         }
@@ -45,5 +46,36 @@ namespace uhttpsharp.Clients
         {
             get { return _client.Client.RemoteEndPoint; }
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    if (_stream != null)
+                        _stream.Dispose();
+                    else
+                        _client.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        ~TcpClientAdapter()
+        {
+            Dispose(false);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

@@ -25,6 +25,7 @@ using uhttpsharp.RequestProviders;
 using uhttpsharp.Logging;
 using System.Linq;
 using System.Threading;
+using System.Collections.Concurrent;
 
 namespace uhttpsharp
 {
@@ -38,6 +39,7 @@ namespace uhttpsharp
         private readonly IList<IHttpRequestHandler> _handlers = new List<IHttpRequestHandler>();
         private readonly IList<(IHttpListener, bool)> _listeners = new List<(IHttpListener, bool)>();
         private readonly IList<Task> _runningListeners = new List<Task>();
+        private readonly ConcurrentBag<WeakReference<IDisposable>> _runningHandlers = new ConcurrentBag<WeakReference<IDisposable>>();
         private readonly CancellationTokenSource _ctsDispose = new CancellationTokenSource();
         private readonly IHttpRequestProvider _requestProvider;
 
@@ -85,7 +87,8 @@ namespace uhttpsharp
             {
                 try
                 {
-                    new HttpClientHandler(await listener.GetClient(cancellationToken).ConfigureAwait(false), aggregatedHandler, _requestProvider);
+                    _runningHandlers.Add(new WeakReference<IDisposable>(
+                        new HttpClientHandler(this, await listener.GetClient(cancellationToken).ConfigureAwait(false), aggregatedHandler, _requestProvider)));
                 }
                 catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
                 {
@@ -100,6 +103,44 @@ namespace uhttpsharp
             Logger.InfoFormat("Embedded uhttpserver stopped.");
         }
 
+        internal void RemoveRunningHandler(HttpClientHandler runningHandler)
+        {
+            List<IDisposable> currentRunningHandlers = new List<IDisposable>(_runningHandlers.Count);
+            while (_runningHandlers.TryTake(out var wrHandler))
+            {
+                if (wrHandler.TryGetTarget(out var crh))
+                    currentRunningHandlers.Add(crh);
+            }
+            currentRunningHandlers.Remove(runningHandler);
+            foreach (var crh in currentRunningHandlers)
+            {
+                _runningHandlers.Add(new WeakReference<IDisposable>(crh));
+            }
+        }
+
+        private void StopClientHandlers()
+        {
+            while (_runningHandlers.TryTake(out var wrHandler))
+            {
+                if (wrHandler.TryGetTarget(out var runningHandler))
+                    runningHandler.Dispose();
+            }
+        }
+
+        private async Task StopClientHandlersAsync()
+        {
+            while (_runningHandlers.TryTake(out var wrHandler))
+            {
+                if (wrHandler.TryGetTarget(out var runningHandler))
+                {
+                    if (runningHandler is IAsyncDisposable asyncDisposable)
+                        await asyncDisposable.DisposeAsync();
+                    else
+                        runningHandler.Dispose();
+                }
+            }
+        }
+
         private void Dispose(bool disposing)
         {
             if (!_isDisposed)
@@ -110,6 +151,7 @@ namespace uhttpsharp
 
                 if (disposing)
                 {
+                    StopClientHandlers();
                     Task.WaitAll(_runningListeners.ToArray());
                     _ctsDispose.Dispose();
                 }
@@ -126,6 +168,7 @@ namespace uhttpsharp
         public async ValueTask DisposeAsync()
         {
             Dispose(false);
+            await Task.Run(StopClientHandlersAsync);
             await Task.WhenAll(_runningListeners).ConfigureAwait(false);
             _ctsDispose.Dispose();
             GC.SuppressFinalize(this);
