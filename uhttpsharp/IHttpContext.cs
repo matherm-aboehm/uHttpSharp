@@ -49,7 +49,7 @@ namespace uhttpsharp
 
             foreach (var kvp in _values)
             {
-                builder.AppendFormat("Set-Cookie: {0}={1}{2}", kvp.Key, kvp.Value, Environment.NewLine);
+                builder.AppendFormat("Set-Cookie: {0}={1}{2}", kvp.Key, kvp.Value, HttpClientHandler.CrLf);
             }
 
             return builder.ToString();

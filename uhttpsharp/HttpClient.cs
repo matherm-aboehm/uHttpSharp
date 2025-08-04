@@ -36,7 +36,7 @@ namespace uhttpsharp
 {
     internal sealed class HttpClientHandler
     {
-        private const string CrLf = "\r\n";
+        internal const string CrLf = "\r\n";
         private static readonly byte[] CrLfBuffer = Encoding.UTF8.GetBytes(CrLf);
 
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
@@ -112,7 +112,7 @@ namespace uhttpsharp
                         if (context.Response != null)
                         {
                             var streamWriter = new StreamWriter(wrappedStream) { AutoFlush = false };
-                            streamWriter.NewLine = "\r\n";
+                            streamWriter.NewLine = CrLf;
                             await WriteResponse(context, streamWriter).ConfigureAwait(false);
                             await wrappedStream.ExplicitFlushAsync().ConfigureAwait(false);
 
