@@ -1,4 +1,6 @@
-﻿using NSubstitute;
+﻿using Microsoft.Diagnostics.Tracing;
+using Microsoft.Diagnostics.Tracing.Session;
+using NSubstitute;
 using NUnit.Framework;
 using Shouldly;
 using System;
@@ -12,6 +14,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using uhttpsharp.Headers;
 using uhttpsharp.Listeners;
@@ -212,6 +215,140 @@ namespace uhttpsharp.Tests
                 request.Method.ShouldBe(HttpMethods.Get);
                 request.Uri.ShouldBe(new Uri(requestUri.AbsolutePath, UriKind.Relative));
                 request.ProtocolVersion.ShouldBe(HttpVersion.Version11);
+            }
+
+        }
+
+        /*private enum TaskWaitBehavior
+        {
+            Synchronous = 1,
+            Asynchronous
+        }
+
+        private enum CausalityRelation
+        {
+            AssignDelegate,
+            Join,
+            Choice,
+            Cancel,
+            Error
+        }
+        private enum AsyncCausalityStatus
+        {
+            Canceled = 2,
+            Completed = 1,
+            Error = 3,
+            Started = 0
+        }
+        private enum CausalitySynchronousWork
+        {
+            CompletionNotification,
+            ProgressNotification,
+            Execution
+        }*/
+
+        /**
+         * TPL trace events:
+         * TaskScheduled (int OriginatingTaskSchedulerID, int OriginatingTaskID, int TaskID, int CreatingTaskID, int TaskCreationOptions)
+         * TaskStarted(int OriginatingTaskSchedulerID, int OriginatingTaskID, int TaskID)
+         * TaskCompleted(int OriginatingTaskSchedulerID, int OriginatingTaskID, int TaskID, bool IsExceptional)
+         * TaskWaitBegin(int OriginatingTaskSchedulerID, int OriginatingTaskID, int TaskID, TaskWaitBehavior Behavior, int ContinueWithTaskID)
+         * TaskWaitEnd(int OriginatingTaskSchedulerID, int OriginatingTaskID, int TaskID)
+         * TaskWaitContinuationComplete(int TaskID)
+         * TaskWaitContinuationStarted(int TaskID)
+         * AwaitTaskContinuationScheduled(int OriginatingTaskSchedulerID, int OriginatingTaskID, int ContinuwWithTaskId)
+         * TraceOperationBegin(int TaskID, string OperationName, long RelatedContext)
+         * TraceOperationRelation(int TaskID, CausalityRelation Relation)
+         * TraceOperationEnd(int TaskID, AsyncCausalityStatus Status)
+         * TraceSynchronousWorkBegin(int TaskID, CausalitySynchronousWork Work)
+         * TraceSynchronousWorkEnd(CausalitySynchronousWork Work)
+         * RunningContinuation(int TaskID, long Object)
+         * RunningContinuationList(int TaskID, int Index, long Object)
+         * DebugMessage(string Message)
+         * DebugFacilityMessage(string Facility, string Message)
+         * DebugFacilityMessage1(string Facility, string Message, string Value1)
+         * SetActivityId(Guid NewId)
+         * NewID(int TaskID)
+         * */
+
+        //class name System.Threading.Tasks.TplEtwProvider
+        const string EventProviderName = "System.Threading.Tasks.TplEventSource";
+        static readonly Guid EventProviderGuid = new Guid("2e5dba47-a3d2-4d16-8ee0-6671ffdcd7b5");
+
+        [Test]
+        public async Task Should_Not_Have_UnobservedTaskException()
+        {
+            // Arrange
+            var workingDir = TestContext.CurrentContext.WorkDirectory;
+            var tracingThread = new Thread(() =>
+            {
+                //see: https://stackoverflow.com/questions/28540728/how-do-i-listen-to-tpl-taskstarted-taskcompleted-etw-events
+                string PrettyPrintEventPayload(TraceEvent @event)
+                {
+                    StringBuilder builder = new StringBuilder();
+                    foreach (var name in @event.PayloadNames)
+                    {
+                        if (builder.Length != 0)
+                            builder.Append(", ");
+                        builder.AppendFormat("{0}={1}", name, @event.PayloadByName(name));
+                    }
+                    return builder.ToString();
+                }
+                using (var session = new TraceEventSession("TplCaptureSession"))
+                using (var logOutput = File.CreateText(Path.Combine(workingDir, "TplEtwTrace.log")))
+                {
+                    session.EnableProvider(EventProviderGuid, TraceEventLevel.Always);
+                    session.Source.Dynamic.AddCallbackForProviderEvent(EventProviderName,
+                        null, @event =>
+                        {
+                            logOutput.WriteLine($"[{DateTime.Now.ToString("o")}] {@event.EventName}: {PrettyPrintEventPayload(@event)}");
+                        });
+
+                    session.Source.Process();
+                }
+            });
+            tracingThread.IsBackground = true;
+            try
+            {
+                tracingThread.Start();
+
+                TaskCompletionSource<bool> tcsUnobservedCalled = new TaskCompletionSource<bool>();
+                TaskScheduler.UnobservedTaskException += (sender, e) =>
+                {
+                    int taskId = ((Task)sender).Id;
+                    Console.WriteLine($"The Task with Id {taskId} failed and following exception was not observed:");
+                    Console.WriteLine(e.Exception.ToString());
+                    tcsUnobservedCalled.TrySetResult(true);
+                };
+
+                // Act
+                var task = Should_Get_Right_Request_From_Browser();
+                await task;
+                task = null;
+                await Task.Yield();
+
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+
+                bool unobservedCalled = false;
+                try
+                {
+                    unobservedCalled = Should.CompleteIn(tcsUnobservedCalled.Task, TimeSpan.FromSeconds(10));
+                }
+                catch (TimeoutException)
+                {
+                    //when it does not complete in 10 sec and there are no other problems with Tasks and GC, it's maybe a success
+                    //Assert.Inconclusive();
+                }
+
+                // Assert
+                unobservedCalled.ShouldBe(false);
+            }
+            finally
+            {
+                tracingThread.Abort();
             }
         }
 
